@@ -1,0 +1,53 @@
+# Sample Python Documentation
+
+## Python Basics
+
+Python is a high-level, interpreted programming language with dynamic semantics. Its high-level built-in data structures, combined with dynamic typing and dynamic binding, make it very attractive for Rapid Application Development.
+
+## Key Features
+
+- **Easy to Learn**: Python has a simple, clean syntax that emphasizes readability
+- **High-level Language**: Python abstracts away many low-level details
+- **Interpreted**: Python code is executed line by line, making debugging easier
+- **Object-Oriented**: Python supports object-oriented programming paradigms
+- **Large Standard Library**: Python comes with a comprehensive standard library
+- **Dynamic Typing**: Variables can change types during runtime
+
+## Basic Syntax
+
+```python
+# Variables and basic types
+name = "Python"
+version = 3.11
+is_awesome = True
+
+# Functions
+def greet(name):
+    return f"Hello, {name}!"
+
+# Classes
+class Calculator:
+    def add(self, a, b):
+        return a + b
+    
+    def multiply(self, a, b):
+        return a * b
+```
+
+## Data Structures
+
+Python provides several built-in data structures:
+
+- **Lists**: Ordered, mutable collections
+- **Tuples**: Ordered, immutable collections  
+- **Dictionaries**: Key-value pairs
+- **Sets**: Unordered collections of unique elements
+
+## Use Cases
+
+Python is widely used in:
+- Web development (Django, Flask)
+- Data science and machine learning
+- Automation and scripting
+- Scientific computing
+- Artificial intelligence

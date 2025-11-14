@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  agent-workbench:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8003:8003"
+    volumes:
+      - ./data:/app/data
+      - ./artifacts:/app/artifacts
+      - ./workspace:/app/workspace
+      - ./config:/app/config
+    environment:
+      - AGENT_SETTINGS=/app/config/settings.yaml
+    restart: unless-stopped

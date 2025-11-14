@@ -1,0 +1,37 @@
+app:
+  host: "0.0.0.0"
+  port: 8003
+  env: "development"
+
+paths:
+  sqlite_db: "artifacts/agent.db"
+  vector_index_dir: "artifacts/vector_index"
+  workspace_dir: "workspace"
+  logs_dir: "artifacts/logs"
+
+llm:
+  provider: "null"  # openai, azure, ollama, null
+  model: "gpt-4"
+  temperature: 0.7
+  max_tokens: 2000
+  openai_api_key: null
+  azure_endpoint: null
+  azure_api_key: null
+  ollama_base_url: "http://localhost:11434"
+
+agent:
+  max_steps: 10
+  allow_tools: ["web", "fs", "python", "rag"]
+  reflection_enabled: true
+  planning_style: "react"  # react, plan_execute
+
+retrieval:
+  k: 5
+  model_name: "all-MiniLM-L6-v2"
+  chunk_size: 512
+  chunk_overlap: 50
+
+monitoring:
+  latency_buckets: [0.1, 0.5, 1.0, 2.0, 5.0, 10.0]
+  enable_metrics: true
+  log_level: "INFO"

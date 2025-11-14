@@ -338,7 +338,8 @@ class NullProvider(LLMProvider):
     
     def generate(self, messages: List[Message], **kwargs: Any) -> LLMResponse:
         # Get the last message to understand the context
-        last_message = messages[-1].content if messages else ""
+        last = messages[-1] if messages else None
+        last_message = last.content if hasattr(last, 'content') else (last.get('content') if isinstance(last, dict) else "")
         
         # Return contextually appropriate responses for different scenarios
         # Check for planning first (more specific patterns)

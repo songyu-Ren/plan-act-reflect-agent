@@ -37,6 +37,51 @@ class MetricsCollector:
             'Total number of tool calls',
             ['tool']
         )
+
+        # Skills metrics
+        self.skills_calls = Counter(
+            'aw_skills_calls_total',
+            'Total number of skills calls',
+            ['skill', 'status']
+        )
+
+        # Planner metrics
+        self.planner_steps = Counter(
+            'aw_planner_steps_total',
+            'Total planner steps',
+            ['kind']
+        )
+
+        # HITL metrics
+        self.hitl_pending = Gauge(
+            'aw_hitl_pending_total',
+            'Number of pending approvals'
+        )
+        self.hitl_decisions = Counter(
+            'aw_hitl_decisions_total',
+            'Total HITL decisions',
+            ['decision']
+        )
+
+        # Run metrics
+        self.runs_total = Counter(
+            'aw_runs_total',
+            'Total runs',
+            ['status']
+        )
+
+        # Trace metrics
+        self.trace_bytes = Counter(
+            'aw_trace_bytes_total',
+            'Total bytes written to traces'
+        )
+
+        # Cost metrics
+        self.cost_units = Counter(
+            'aw_cost_units_total',
+            'Cost units recorded',
+            ['type']
+        )
         
         # Agent metrics
         self.agent_steps = Counter(
@@ -66,6 +111,27 @@ class MetricsCollector:
     def record_tool_call(self, tool: str) -> None:
         """Record a tool call"""
         self.tool_calls.labels(tool=tool).inc()
+
+    def record_skill_call(self, skill: str, status: str) -> None:
+        self.skills_calls.labels(skill=skill, status=status).inc()
+
+    def record_planner_step(self, kind: str) -> None:
+        self.planner_steps.labels(kind=kind).inc()
+
+    def set_hitl_pending(self, count: int) -> None:
+        self.hitl_pending.set(count)
+
+    def record_hitl_decision(self, decision: str) -> None:
+        self.hitl_decisions.labels(decision=decision).inc()
+
+    def record_run(self, status: str) -> None:
+        self.runs_total.labels(status=status).inc()
+
+    def add_trace_bytes(self, n: int) -> None:
+        self.trace_bytes.inc(n)
+
+    def add_cost(self, typ: str, n: int) -> None:
+        self.cost_units.labels(type=typ).inc(n)
     
     def record_agent_step(self) -> None:
         """Record an agent step"""

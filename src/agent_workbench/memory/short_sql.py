@@ -20,6 +20,7 @@ class MessageRecord(BaseModel):
     content: str
     timestamp: datetime
     metadata: Optional[Dict[str, Any]] = None
+    tag: Optional[str] = "episodic"
 
 
 class ToolEvent(BaseModel):
@@ -66,6 +67,7 @@ class ShortTermMemory:
                     content TEXT NOT NULL,
                     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     metadata TEXT,
+                    tag TEXT,
                     FOREIGN KEY (session_id) REFERENCES sessions(id)
                 )
             """)
@@ -97,6 +99,11 @@ class ShortTermMemory:
             """)
             
             await db.commit()
+            try:
+                await db.execute("ALTER TABLE messages ADD COLUMN tag TEXT")
+                await db.commit()
+            except Exception:
+                pass
     
     async def create_session(self, session_id: str) -> None:
         async with aiosqlite.connect(self.db_path) as db:
@@ -109,11 +116,20 @@ class ShortTermMemory:
     async def add_message(self, message: MessageRecord) -> None:
         async with aiosqlite.connect(self.db_path) as db:
             metadata_json = json.dumps(message.metadata) if message.metadata else None
-            await db.execute(
-                """INSERT INTO messages (session_id, role, content, timestamp, metadata)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (message.session_id, message.role, message.content, message.timestamp, metadata_json)
-            )
+            async with db.execute("PRAGMA table_info(messages)") as cursor:
+                cols = [row[1] async for row in cursor]
+            if "tag" in cols:
+                await db.execute(
+                    """INSERT INTO messages (session_id, role, content, timestamp, metadata, tag)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (message.session_id, message.role, message.content, message.timestamp, metadata_json, message.tag)
+                )
+            else:
+                await db.execute(
+                    """INSERT INTO messages (session_id, role, content, timestamp, metadata)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (message.session_id, message.role, message.content, message.timestamp, metadata_json)
+                )
             await db.commit()
     
     async def add_tool_event(self, event: ToolEvent) -> None:
@@ -156,13 +172,15 @@ class ShortTermMemory:
             messages = []
             for row in rows:
                 metadata = json.loads(row["metadata"]) if row["metadata"] else None
+                tag_value = row["tag"] if "tag" in row.keys() else "episodic"
                 messages.append(MessageRecord(
                     id=row["id"],
                     session_id=row["session_id"],
                     role=row["role"],
                     content=row["content"],
                     timestamp=datetime.fromisoformat(row["timestamp"]),
-                    metadata=metadata
+                    metadata=metadata,
+                    tag=tag_value
                 ))
             
             return messages[::-1]  # Reverse to get chronological order

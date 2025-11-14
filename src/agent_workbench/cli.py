@@ -12,6 +12,9 @@ from agent_workbench.llm.providers import get_provider
 from agent_workbench.logging import setup_logging
 from agent_workbench.settings import Settings
 from agent_workbench.tools.rag import RAGTool
+from agent_workbench.skills import SkillsRegistry
+from agent_workbench.trace import TraceReader
+from agent_workbench.planner_hier import Manager
 
 
 @click.group()
@@ -31,6 +34,8 @@ def main(ctx, config):
     ctx.obj['logger'] = logger
     ctx.obj['agent'] = agent
     ctx.obj['llm_provider'] = llm_provider
+    ctx.obj['skills_registry'] = SkillsRegistry(settings)
+    ctx.obj['skills_registry'].load_builtins()
 
 
 @main.command()
@@ -300,9 +305,48 @@ def status(ctx):
             click.echo(f"  ✗ {path} (not found)")
     
     click.echo("\nTools Available:")
-    agent = ctx.obj['agent']
-    for tool_name in agent.tools:
-        click.echo(f"  - {tool_name}")
+    reg = ctx.obj['skills_registry']
+    for name in reg.list():
+        click.echo(f"  - {name}")
+
+
+@main.command()
+@click.pass_context
+def tools(ctx):
+    """List skills/tools"""
+    reg = ctx.obj['skills_registry']
+    click.echo("Available skills:")
+    for name in reg.list():
+        click.echo(f"  - {name}")
+
+
+@main.command()
+@click.option('--goal', '-g', required=True, help='Planning goal')
+@click.option('--out', '-o', required=True, type=click.Path(), help='Output file for plan JSON')
+@click.pass_context
+def plan(ctx, goal, out):
+    """Generate a hierarchical plan and save as JSON"""
+    settings = ctx.obj['settings']
+    manager = Manager(settings.skills.get('allowed', []), concurrency=settings.skills.get('concurrency', 1))
+    graph = manager.build_plan(goal)
+    data = {
+        "nodes": [graph.nodes[n]["data"].__dict__ for n in graph.nodes],
+        "edges": list(graph.edges),
+        "goal": goal,
+    }
+    Path(out).write_text(json.dumps(data, indent=2))
+    click.echo(f"Plan saved to {out}")
+
+
+@main.command()
+@click.argument('run_id')
+@click.pass_context
+def replay(ctx, run_id):
+    """Replay a previous run trace"""
+    settings = ctx.obj['settings']
+    reader = TraceReader(settings.tracing.get('export_dir', 'artifacts/traces'))
+    for ev in reader.read(run_id):
+        click.echo(str(ev))
 
 
 if __name__ == "__main__":

@@ -100,13 +100,14 @@ class FilesystemTool:
                 items.append(item_info)
             
             return {
+                "success": True,
                 "path": path,
                 "items": items,
                 "total": len(items)
             }
             
         except Exception as e:
-            return {"error": f"Failed to list {path}: {str(e)}", "items": []}
+            return {"success": False, "error": f"Failed to list {path}: {str(e)}", "items": []}
     
     def delete(self, path: str) -> Dict[str, Any]:
         """Delete file or directory"""

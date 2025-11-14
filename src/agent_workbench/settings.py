@@ -66,6 +66,11 @@ class Settings:
     agent: AgentConfig = field(default_factory=AgentConfig)
     retrieval: RetrievalConfig = field(default_factory=RetrievalConfig)
     monitoring: MonitoringConfig = field(default_factory=MonitoringConfig)
+    skills: Dict[str, Any] = field(default_factory=dict)
+    hitl: Dict[str, Any] = field(default_factory=dict)
+    safety: Dict[str, Any] = field(default_factory=dict)
+    tracing: Dict[str, Any] = field(default_factory=dict)
+    costs: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def load(cls, config_path: Optional[str] = None) -> Settings:
@@ -90,6 +95,11 @@ class Settings:
             agent=AgentConfig(**data.get("agent", {})),
             retrieval=RetrievalConfig(**data.get("retrieval", {})),
             monitoring=MonitoringConfig(**data.get("monitoring", {})),
+            skills=data.get("skills", {}),
+            hitl=data.get("hitl", {}),
+            safety=data.get("safety", {}),
+            tracing=data.get("tracing", {}),
+            costs=data.get("costs", {}),
         )
 
     def ensure_directories(self) -> None:

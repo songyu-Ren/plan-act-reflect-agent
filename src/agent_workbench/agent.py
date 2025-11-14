@@ -24,6 +24,11 @@ from agent_workbench.tools.fs import FilesystemTool
 from agent_workbench.tools.python_runner import PythonRunner
 from agent_workbench.tools.rag import RAGTool
 from agent_workbench.tools.web import fetch_url
+from agent_workbench.skills import SkillsRegistry, SkillContext
+from agent_workbench.planner_hier import Manager
+from agent_workbench.trace import TraceWriter
+from agent_workbench.cost import CostTracker
+from agent_workbench.hitl import GLOBAL_APPROVAL_STORE
 
 
 class AgentStep(BaseModel):
@@ -43,6 +48,7 @@ class AgentResult(BaseModel):
     artifacts_paths: List[str] = []
     memory_updates: Dict[str, Any] = {}
     session_id: str
+    run_id: Optional[str] = None
 
 
 class Agent:
@@ -60,6 +66,16 @@ class Agent:
             "python": PythonRunner(settings),
             "rag": RAGTool(settings),
         }
+
+        # Skills and planner
+        self.skills = SkillsRegistry(settings)
+        self.skills.load_builtins()
+        self.manager = Manager(self.settings.skills.get("allowed", []), concurrency=self.settings.skills.get("concurrency", 1))
+
+        # Trace and cost
+        self.tracer = TraceWriter(self.settings.tracing.get("export_dir", "artifacts/traces"))
+        self.costs = CostTracker()
+        self.approvals = GLOBAL_APPROVAL_STORE
         
         self.planner = Planner(llm_provider, settings)
         self.reflector = Reflector(llm_provider, settings)
@@ -101,12 +117,17 @@ class Agent:
             max_steps = self.settings.agent.max_steps
         
         steps_taken = []
+        run_id = self.tracer.new_run() if self.settings.tracing.get("enabled", True) else f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        self.tracer.append(run_id, {"type": "plan_start", "goal": goal})
         current_state = f"Starting task with goal: {goal}"
         
         # Planning phase
         if self.settings.agent.planning_style == "plan_execute":
             plan = self.planner.plan(goal, current_state)
             await self._log_plan(plan, session_id)
+        else:
+            graph = self.manager.build_plan(goal)
+            self.tracer.append(run_id, {"type": "plan_graph", "nodes": [graph.nodes[n]["data"].__dict__ for n in graph.nodes], "edges": list(graph.edges)})
         
         step_count = 0
         
@@ -121,19 +142,42 @@ class Agent:
                     "rationale": plan.steps[step_count - 1].rationale
                 }
             else:
-                # ReAct style - decide next action based on current state
-                history = self._format_step_history(steps_taken)
-                next_action = self.planner.suggest_next_step(goal, history, current_state)
+                # Hierarchical plan execution: take next pending node
+                pending_nodes = [n for n in graph.nodes if graph.nodes[n]["data"].status == "pending" and all(graph.nodes[p]["data"].status == "done" for p in graph.predecessors(n))]
+                if pending_nodes:
+                    node = graph.nodes[pending_nodes[0]]["data"]
+                    next_action = {"tool_name": node.skill.split('.')[0], "skill": node.skill, "tool_input": node.args, "rationale": "hierarchical"}
+                else:
+                    next_action = None
                 
                 if next_action is None:
                     # Goal achieved
                     break
             
-            # Execute tool
-            tool_name = next_action["tool_name"]
+            # Execute tool or skill
+            tool_name = next_action.get("tool_name")
             tool_input = next_action["tool_input"]
+            skill_name = next_action.get("skill")
             
-            tool_result = await self._execute_tool(tool_name, tool_input, session_id)
+            # HITL approvals for risky actions
+            risky_actions = {a.get("action"): a.get("reason") for a in self.settings.hitl.get("approvals", [])}
+            if skill_name in risky_actions:
+                item = self.approvals.create(skill_name, risky_actions[skill_name])
+                self.tracer.append(run_id, {"type": "approval", "id": item.id, "action": item.action, "reason": item.reason})
+                if self.llm_provider.__class__.__name__ == "NullProvider":
+                    self.approvals.approve(item.id)
+                else:
+                    await asyncio.sleep(0.1)
+
+            if skill_name:
+                ctx = SkillContext(session_id=session_id, settings=self.settings)
+                tool_result = self.skills.execute(skill_name, ctx, tool_input)
+                self.metrics.record_skill_call(skill_name, "success" if tool_result.get("success") else "failure")
+            else:
+                tool_result = await self._execute_tool(tool_name, tool_input, session_id)
+
+            self.tracer.append(run_id, {"type": "tool_call", "name": skill_name or tool_name, "args": tool_input, "result": tool_result})
+            self.costs.add_steps(1)
             
             # Record tool event
             await self.short_memory.add_tool_event(ToolEvent(
@@ -216,7 +260,8 @@ class Agent:
             final_output=final_output,
             artifacts_paths=artifacts_paths,
             memory_updates=memory_updates,
-            session_id=session_id
+            session_id=session_id,
+            run_id=run_id
         )
         
         # Record final message
@@ -228,6 +273,12 @@ class Agent:
             metadata={"status": status, "steps": step_count}
         ))
         
+        self.tracer.append(run_id, {"type": "done", "status": status, "cost": self.costs.snapshot()})
+        try:
+            self.metrics.record_run(status)
+            self.metrics.add_cost("steps", self.costs.snapshot().get("steps", 0))
+        except Exception:
+            pass
         return result
     
     async def chat(self, session_id: str, user_text: str) -> str:

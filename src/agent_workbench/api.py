@@ -37,6 +37,7 @@ class TaskResponse(BaseModel):
     task_id: str
     status: str
     result: Optional[AgentResult] = None
+    run_id: Optional[str] = None
 
 
 class StreamRequest(BaseModel):
@@ -45,7 +46,7 @@ class StreamRequest(BaseModel):
 
 
 # Global state
-app = FastAPI(title="Agent Workbench", version="0.1.0")
+app = FastAPI(title="Agent Workbench", version="0.2.0")
 settings = Settings.load()
 settings.ensure_directories()
 
@@ -53,6 +54,10 @@ logger = setup_logging(settings)
 metrics = get_metrics(settings)
 llm_provider = get_provider(settings.llm)
 agent = Agent(settings, llm_provider)
+from agent_workbench.api_hitl import router as hitl_router
+from agent_workbench.api_events import router as events_router
+app.include_router(hitl_router)
+app.include_router(events_router)
 
 # Task storage (in production, use Redis or database)
 tasks: Dict[str, AgentResult] = {}
@@ -133,7 +138,8 @@ async def run_task_endpoint(request: TaskRequest):
         return TaskResponse(
             task_id=task_id,
             status=result.status,
-            result=result
+            result=result,
+            run_id=result.run_id
         )
     except Exception as e:
         logger.error(f"Task execution error: {e}")

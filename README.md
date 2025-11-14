@@ -75,3 +75,11 @@ The system follows a planner → executor → reflector loop:
 3. **Reflector**: Assesses outcomes, updates memory, decides next actions
 
 Tools are sandboxed and resource-limited for safety. Memory persists across sessions with both short-term context and long-term knowledge storage.
+\n+## v2 Enhancements
+\n+- Skills & contracts with JSON-Schema validation\n- Hierarchical planning (Manager→Worker DAG)\n- Human-in-the-loop approvals API\n- Trace export (JSONL) and replay\n- Cost reporting and extended metrics
+\n+## Additional CLI
+\n+```bash
+aw tools
+aw plan --goal "Summarize corpus" --out plan.json
+aw replay <RUN_ID>
+```
